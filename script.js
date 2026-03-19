@@ -4,6 +4,8 @@ let currentFontSize = 100;
 let currentTheme = 'dark';
 let selectedFragment = '';
 
+const AI_ENDPOINT = 'https://prknybetxirzbzkvmovw.supabase.co/functions/v1/omnia-ai';
+
 const searchInput = document.getElementById('searchInput');
 const languageSelect = document.getElementById('languageSelect');
 const searchBtn = document.getElementById('searchBtn');
@@ -92,24 +94,98 @@ function openActionPanel(text) {
   actionPanelEl.classList.add('active');
 }
 
-function translateSelection() {
-  if (!selectedFragment) return;
-  actionResultEl.textContent =
-    'Тестовый перевод:\n\n' +
-    'На следующем этапе сюда подключается настоящий AI-перевод. Сейчас мы проверяем механику интерфейса.';
+async function callAI(action, text, targetLanguage = 'Russian') {
+  const response = await fetch(AI_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      action,
+      text,
+      targetLanguage
+    })
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    console.error('AI error response:', data);
+    throw new Error(
+      typeof data?.error === 'string'
+        ? data.error
+        : JSON.stringify(data?.error || data || 'Unknown AI error')
+    );
+  }
+
+  return data.result || 'Пустой ответ.';
 }
 
-function explainSelection() {
+function getTargetLanguageName() {
+  const langCode = languageSelect.value || 'ru';
+
+  const languageMap = {
+    ru: 'Russian',
+    en: 'English',
+    de: 'German',
+    fr: 'French',
+    it: 'Italian',
+    es: 'Spanish',
+    pt: 'Portuguese',
+    zh: 'Chinese',
+    la: 'Latin'
+  };
+
+  return languageMap[langCode] || 'Russian';
+}
+
+async function translateSelection() {
   if (!selectedFragment) return;
-  actionResultEl.textContent =
-    'Тестовое объяснение:\n\n' +
-    'Этот фрагмент пока объясняется заглушкой. Следующим шагом сюда подключается интеллектуальное объяснение текста.';
+
+  actionResultEl.textContent = 'Перевожу...';
+
+  try {
+    const targetLanguage = getTargetLanguageName();
+    const result = await callAI('translate', selectedFragment, targetLanguage);
+    actionResultEl.textContent = result;
+  } catch (error) {
+    console.error(error);
+    actionResultEl.textContent =
+      'Ошибка перевода.\n\n' +
+      'Проверь:\n' +
+      '1) что функция задеплоена,\n' +
+      '2) что секрет OPENAI_API_KEY сохранён,\n' +
+      '3) что после добавления секрета ты снова нажала Deploy.\n\n' +
+      'Текст ошибки:\n' +
+      error.message;
+  }
+}
+
+async function explainSelection() {
+  if (!selectedFragment) return;
+
+  actionResultEl.textContent = 'Объясняю...';
+
+  try {
+    const result = await callAI('explain', selectedFragment, 'Russian');
+    actionResultEl.textContent = result;
+  } catch (error) {
+    console.error(error);
+    actionResultEl.textContent =
+      'Ошибка объяснения.\n\n' +
+      'Проверь:\n' +
+      '1) что функция задеплоена,\n' +
+      '2) что секрет OPENAI_API_KEY сохранён,\n' +
+      '3) что после добавления секрета ты снова нажала Deploy.\n\n' +
+      'Текст ошибки:\n' +
+      error.message;
+  }
 }
 
 function saveSelection() {
   if (!selectedFragment) return;
   actionResultEl.textContent =
-    'Фрагмент сохранён в тестовом режиме. Позже подключим реальные заметки и цитаты.';
+    'Фрагмент сохранён в тестовом режиме. Следующим шагом можно подключить реальные заметки и цитаты.';
 }
 
 function escapeHtml(str) {
