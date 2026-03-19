@@ -1,87 +1,324 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<title>Reader</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reader</title>
 
-<link href="https://fonts.googleapis.com/css2?family=EB+Garamond&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;700&display=swap" rel="stylesheet">
 
-<style>
-body {
-  margin: 0;
-  font-family: 'EB Garamond', serif;
-  background: #f5f1e8;
-  color: #1a1a1a;
-  display: flex;
-  justify-content: center;
-}
+  <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
 
-.container {
-  max-width: 700px;
-  padding: 40px 20px;
-  line-height: 1.8;
-  font-size: 20px;
-}
+  <style>
+    :root {
+      --bg: #f5f1e8;
+      --text: #1a1a1a;
+      --panel: rgba(255, 255, 255, 0.72);
+      --border: rgba(0, 0, 0, 0.08);
+      --button-bg: rgba(255, 255, 255, 0.75);
+      --button-text: #1a1a1a;
+    }
 
-.menu {
-  position: fixed;
-  top: 10px;
-  right: 10px;
-}
+    * {
+      box-sizing: border-box;
+    }
 
-button {
-  padding: 8px 12px;
-  margin: 2px;
-  border: none;
-  cursor: pointer;
-}
+    body {
+      margin: 0;
+      font-family: 'EB Garamond', serif;
+      background: var(--bg);
+      color: var(--text);
+      transition: background 0.3s ease, color 0.3s ease;
+    }
 
-.dark {
-  background: #0e0e10;
-  color: #e0e0e0;
-}
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--panel);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+    }
 
-.purple {
-  background: #2c1b3a;
-  color: #e8ddf2;
-}
+    .topbar-left,
+    .topbar-right {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
 
-.red {
-  background: #3a0f14;
-  color: #f2d8da;
-}
-</style>
+    button, label.button {
+      border: 1px solid var(--border);
+      background: var(--button-bg);
+      color: var(--button-text);
+      padding: 8px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 16px;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    button:hover, label.button:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+    }
+
+    .title {
+      font-size: 18px;
+      font-weight: 700;
+      opacity: 0.9;
+      padding: 0 6px;
+    }
+
+    #fileInput {
+      display: none;
+    }
+
+    .reader-shell {
+      display: flex;
+      justify-content: center;
+      padding: 24px 12px 40px;
+    }
+
+    .reader-frame {
+      width: 100%;
+      max-width: 900px;
+      min-height: calc(100vh - 120px);
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.25);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+    }
+
+    #viewer {
+      width: 100%;
+      height: calc(100vh - 140px);
+      min-height: 600px;
+      background: var(--bg);
+    }
+
+    .bottom-controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      padding: 14px 16px 20px;
+      flex-wrap: wrap;
+    }
+
+    .status {
+      text-align: center;
+      font-size: 16px;
+      opacity: 0.8;
+      padding: 8px 16px 0;
+    }
+
+    body.theme-dark {
+      --bg: #0e0e10;
+      --text: #e0e0e0;
+      --panel: rgba(20, 20, 24, 0.78);
+      --border: rgba(255, 255, 255, 0.08);
+      --button-bg: rgba(40, 40, 48, 0.85);
+      --button-text: #e8e8e8;
+    }
+
+    body.theme-purple {
+      --bg: #2c1b3a;
+      --text: #eadff6;
+      --panel: rgba(42, 24, 56, 0.82);
+      --border: rgba(255, 255, 255, 0.08);
+      --button-bg: rgba(66, 40, 86, 0.9);
+      --button-text: #f1e8fa;
+    }
+
+    body.theme-red {
+      --bg: #3a0f14;
+      --text: #f4dcdf;
+      --panel: rgba(56, 16, 22, 0.84);
+      --border: rgba(255, 255, 255, 0.08);
+      --button-bg: rgba(88, 28, 36, 0.92);
+      --button-text: #f8e8ea;
+    }
+
+    @media (max-width: 700px) {
+      .topbar {
+        justify-content: center;
+      }
+
+      .title {
+        width: 100%;
+        text-align: center;
+      }
+
+      #viewer {
+        height: calc(100vh - 200px);
+        min-height: 500px;
+      }
+    }
+  </style>
 </head>
-
 <body>
+  <div class="topbar">
+    <div class="topbar-left">
+      <label for="fileInput" class="button">Открыть EPUB</label>
+      <input type="file" id="fileInput" accept=".epub" />
+      <button onclick="prevPage()">← Назад</button>
+      <button onclick="nextPage()">Вперёд →</button>
+    </div>
 
-<div class="menu">
-  <button onclick="setTheme('default')">☀️</button>
-  <button onclick="setTheme('dark')">🌙</button>
-  <button onclick="setTheme('purple')">🟣</button>
-  <button onclick="setTheme('red')">🔴</button>
-</div>
+    <div class="title" id="bookTitle">Читалка</div>
 
-<div class="container" id="text">
+    <div class="topbar-right">
+      <button onclick="changeFontSize(-2)">A−</button>
+      <button onclick="changeFontSize(2)">A+</button>
+      <button onclick="setTheme('default')">☀️</button>
+      <button onclick="setTheme('dark')">🌙</button>
+      <button onclick="setTheme('purple')">🟣</button>
+      <button onclick="setTheme('red')">🔴</button>
+    </div>
+  </div>
 
-<h1>Фридрих Ницше</h1>
+  <div class="reader-shell">
+    <div class="reader-frame">
+      <div class="status" id="statusText">Загрузи EPUB-файл и книга откроется прямо здесь.</div>
+      <div id="viewer"></div>
+      <div class="bottom-controls">
+        <button onclick="prevPage()">← Предыдущая страница</button>
+        <button onclick="nextPage()">Следующая страница →</button>
+      </div>
+    </div>
+  </div>
 
-<p>
-Кто с чудовищами борется, тому следует остерегаться,
-чтобы самому не стать чудовищем.
-</p>
+  <script>
+    let book = null;
+    let rendition = null;
+    let currentFontSize = 100;
+    let currentTheme = 'default';
 
-<p>
-И если ты долго смотришь в бездну, то бездна тоже смотрит в тебя.
-</p>
+    const fileInput = document.getElementById('fileInput');
+    const statusText = document.getElementById('statusText');
+    const bookTitle = document.getElementById('bookTitle');
 
-</div>
+    function setTheme(theme) {
+      document.body.className = theme === 'default' ? '' : 'theme-' + theme;
+      currentTheme = theme;
+      applyReaderStyles();
+    }
 
-<script>
-function setTheme(theme) {
-  document.body.className = theme;
-}
-</script>
+    function changeFontSize(delta) {
+      currentFontSize += delta;
+      if (currentFontSize < 80) currentFontSize = 80;
+      if (currentFontSize > 180) currentFontSize = 180;
+      applyReaderStyles();
+    }
 
+    function applyReaderStyles() {
+      if (!rendition) return;
+
+      let bg = '#f5f1e8';
+      let text = '#1a1a1a';
+
+      if (currentTheme === 'dark') {
+        bg = '#0e0e10';
+        text = '#e0e0e0';
+      } else if (currentTheme === 'purple') {
+        bg = '#2c1b3a';
+        text = '#eadff6';
+      } else if (currentTheme === 'red') {
+        bg = '#3a0f14';
+        text = '#f4dcdf';
+      }
+
+      rendition.themes.default({
+        'body': {
+          'background': bg + ' !important',
+          'color': text + ' !important',
+          'font-family': "'EB Garamond', serif !important",
+          'font-size': currentFontSize + '% !important',
+          'line-height': '1.8 !important',
+          'padding': '24px !important'
+        },
+        'p': {
+          'line-height': '1.8 !important'
+        },
+        'h1, h2, h3, h4, h5, h6': {
+          'color': text + ' !important',
+          'font-family': "'EB Garamond', serif !important"
+        },
+        'a': {
+          'color': text + ' !important'
+        }
+      });
+
+      rendition.themes.select('default');
+    }
+
+    function prevPage() {
+      if (rendition) rendition.prev();
+    }
+
+    function nextPage() {
+      if (rendition) rendition.next();
+    }
+
+    fileInput.addEventListener('change', function(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      statusText.textContent = 'Загружаю книгу...';
+      bookTitle.textContent = file.name.replace('.epub', '');
+
+      const fileURL = URL.createObjectURL(file);
+
+      if (rendition) {
+        document.getElementById('viewer').innerHTML = '';
+      }
+
+      book = ePub(fileURL);
+
+      rendition = book.renderTo('viewer', {
+        width: '100%',
+        height: '100%',
+        spread: 'none'
+      });
+
+      rendition.display();
+
+      book.loaded.metadata.then(function(metadata) {
+        if (metadata && metadata.title) {
+          bookTitle.textContent = metadata.title;
+        }
+      });
+
+      rendition.on('rendered', function() {
+        statusText.textContent = 'Книга открыта.';
+        applyReaderStyles();
+      });
+
+      rendition.on('relocated', function(location) {
+        const percent = location && location.start && location.start.percentage
+          ? Math.round(location.start.percentage * 100)
+          : 0;
+        statusText.textContent = 'Прочитано: ' + percent + '%';
+      });
+
+      applyReaderStyles();
+    });
+
+    document.addEventListener('keydown', function(event) {
+      if (event.key === 'ArrowRight') nextPage();
+      if (event.key === 'ArrowLeft') prevPage();
+    });
+  </script>
 </body>
 </html>
