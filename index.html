@@ -10,8 +10,6 @@
   <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="style.css" />
-
-  <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
 </head>
 <body class="theme-dark">
   <div class="app">
@@ -59,8 +57,7 @@
       <aside class="sidebar">
         <h2 class="sidebar-title">Библиотека</h2>
         <div class="sidebar-note">
-          Сейчас это тестовая внешняя библиотека через Project Gutenberg.
-          На этом этапе мы проверяем механику Omnia: поиск, открытие книги, выделение текста, перевод и объяснение.
+          Сейчас Omnia ищет книги в Project Gutenberg и открывает их прямо на странице в виде читаемого текста.
         </div>
 
         <div id="results" class="results">
@@ -102,12 +99,12 @@
         </div>
 
         <div id="readerFrame" class="reader-frame" style="display:none;">
-          <div id="viewer"></div>
-
-          <div class="reader-controls">
-            <button id="prevBtn">← Назад</button>
-            <button id="nextBtn">Вперёд →</button>
+          <div class="reader-controls top-controls">
+            <button id="prevSectionBtn">← Назад</button>
+            <button id="nextSectionBtn">Вперёд →</button>
           </div>
+
+          <div id="viewer" class="viewer-text"></div>
         </div>
       </main>
     </div>
