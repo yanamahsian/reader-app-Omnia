@@ -200,16 +200,13 @@ async function callAI(action, text, targetLanguage = 'Russian') {
 
   const data = await response.json();
 
-  if (!response.ok) {
-    console.error('AI error response:', data);
-    throw new Error(
-      typeof data?.error === 'string'
-        ? data.error
-        : JSON.stringify(data?.error || data || 'Unknown AI error')
-    );
-  }
+if (!response.ok) {
+  console.error(data);
+  throw new Error(data?.error || 'AI error');
+}
 
-  return data.result || 'Пустой ответ.';
+return data.result || data.response || JSON.stringify(data);
+
 }
 
 function getTargetLanguageName() {
