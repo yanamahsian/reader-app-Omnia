@@ -2,103 +2,117 @@ const AI_ENDPOINT = 'https://prknybetxirzbzkvmovw.supabase.co/functions/v1/omnia
 const SUPABASE_ANON_KEY = 'sb_publishable_X2hZ6bXgj5HHSSZQPiXYsw_mhF5NHpy';
 
 let currentFontSize = 22;
-let currentTheme = 'dark';
+let currentThemeCycle = ['dark', 'default', 'purple', 'red'];
+let currentThemeIndex = 0;
+
 let selectedFragment = '';
 let sections = [];
 let currentSectionIndex = 0;
+let currentBookTitle = 'Omnia';
+let overlayVisible = true;
+
+let touchStartX = 0;
+let touchEndX = 0;
 
 const searchInput = document.getElementById('searchInput');
 const languageSelect = document.getElementById('languageSelect');
 const searchBtn = document.getElementById('searchBtn');
 const resultsEl = document.getElementById('results');
 
+const homeView = document.getElementById('homeView');
+const readerView = document.getElementById('readerView');
+
 const bookTitleEl = document.getElementById('bookTitle');
-const statusTextEl = document.getElementById('statusText');
-const emptyStateEl = document.getElementById('emptyState');
-const readerFrameEl = document.getElementById('readerFrame');
+const chapterLineEl = document.getElementById('chapterLine');
+const remainingLineEl = document.getElementById('remainingLine');
 const viewerEl = document.getElementById('viewer');
 
-const actionPanelEl = document.getElementById('actionPanel');
-const selectedTextBoxEl = document.getElementById('selectedTextBox');
-const actionResultEl = document.getElementById('actionResult');
-
-const closeActionPanelBtn = document.getElementById('closeActionPanelBtn');
-const translateBtn = document.getElementById('translateBtn');
-const explainBtn = document.getElementById('explainBtn');
-const saveBtn = document.getElementById('saveBtn');
-
-const prevSectionBtn = document.getElementById('prevSectionBtn');
-const nextSectionBtn = document.getElementById('nextSectionBtn');
+const readerOverlayEl = document.getElementById('readerOverlay');
+const backToLibraryBtn = document.getElementById('backToLibraryBtn');
 const fontMinusBtn = document.getElementById('fontMinusBtn');
 const fontPlusBtn = document.getElementById('fontPlusBtn');
+const readerThemeBtn = document.getElementById('readerThemeBtn');
 
 const themeDefaultBtn = document.getElementById('themeDefaultBtn');
 const themeDarkBtn = document.getElementById('themeDarkBtn');
 const themePurpleBtn = document.getElementById('themePurpleBtn');
 const themeRedBtn = document.getElementById('themeRedBtn');
 
-const prevSectionBtnBottom = document.getElementById('prevSectionBtnBottom');
-const nextSectionBtnBottom = document.getElementById('nextSectionBtnBottom');
+const leftTapZone = document.getElementById('leftTapZone');
+const centerTapZone = document.getElementById('centerTapZone');
+const rightTapZone = document.getElementById('rightTapZone');
 
-const toolbar = document.createElement('div');
-toolbar.className = 'selection-toolbar';
-toolbar.innerHTML = `
-  <button id="toolbarTranslateBtn">Перевести</button>
-  <button id="toolbarExplainBtn">Объяснить</button>
-  <button id="toolbarSaveBtn">Сохранить</button>
-`;
-document.body.appendChild(toolbar);
-
+const toolbar = document.getElementById('selectionToolbar');
 const toolbarTranslateBtn = document.getElementById('toolbarTranslateBtn');
 const toolbarExplainBtn = document.getElementById('toolbarExplainBtn');
 const toolbarSaveBtn = document.getElementById('toolbarSaveBtn');
+
+const sheetBackdrop = document.getElementById('sheetBackdrop');
+const actionSheet = document.getElementById('actionSheet');
+const closeActionSheetBtn = document.getElementById('closeActionSheetBtn');
+const selectedTextBoxEl = document.getElementById('selectedTextBox');
+const translateBtn = document.getElementById('translateBtn');
+const explainBtn = document.getElementById('explainBtn');
+const saveBtn = document.getElementById('saveBtn');
+const actionResultEl = document.getElementById('actionResult');
 
 searchBtn.addEventListener('click', searchBooks);
 searchInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') searchBooks();
 });
 
-fontMinusBtn.addEventListener('click', () => changeFontSize(-2));
-fontPlusBtn.addEventListener('click', () => changeFontSize(2));
-
 themeDefaultBtn.addEventListener('click', () => setTheme('default'));
 themeDarkBtn.addEventListener('click', () => setTheme('dark'));
 themePurpleBtn.addEventListener('click', () => setTheme('purple'));
 themeRedBtn.addEventListener('click', () => setTheme('red'));
 
-closeActionPanelBtn.addEventListener('click', closeActionPanel);
-translateBtn.addEventListener('click', translateSelection);
-explainBtn.addEventListener('click', explainSelection);
-saveBtn.addEventListener('click', saveSelection);
+backToLibraryBtn.addEventListener('click', returnToLibrary);
+fontMinusBtn.addEventListener('click', () => changeFontSize(-2));
+fontPlusBtn.addEventListener('click', () => changeFontSize(2));
+readerThemeBtn.addEventListener('click', cycleReaderTheme);
+
+leftTapZone.addEventListener('click', prevSection);
+rightTapZone.addEventListener('click', nextSection);
+centerTapZone.addEventListener('click', toggleOverlay);
+
+viewerEl.addEventListener('mouseup', handleSelection);
+viewerEl.addEventListener('touchend', () => {
+  setTimeout(handleSelection, 50);
+  handleSwipeEnd();
+});
+
+viewerEl.addEventListener('touchstart', (e) => {
+  touchStartX = e.changedTouches[0].screenX;
+});
+
+viewerEl.addEventListener('touchmove', (e) => {
+  touchEndX = e.changedTouches[0].screenX;
+});
 
 toolbarTranslateBtn.addEventListener('click', () => {
   hideToolbar();
-  openActionPanel(selectedFragment);
+  openActionSheet(selectedFragment);
   translateSelection();
 });
 
 toolbarExplainBtn.addEventListener('click', () => {
   hideToolbar();
-  openActionPanel(selectedFragment);
+  openActionSheet(selectedFragment);
   explainSelection();
 });
 
 toolbarSaveBtn.addEventListener('click', () => {
   hideToolbar();
-  openActionPanel(selectedFragment);
+  openActionSheet(selectedFragment);
   saveSelection();
 });
 
-prevSectionBtn.addEventListener('click', prevSection);
-nextSectionBtn.addEventListener('click', nextSection);
+closeActionSheetBtn.addEventListener('click', closeActionSheet);
+sheetBackdrop.addEventListener('click', closeActionSheet);
 
-if (prevSectionBtnBottom) prevSectionBtnBottom.addEventListener('click', prevSection);
-if (nextSectionBtnBottom) nextSectionBtnBottom.addEventListener('click', nextSection);
-
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowLeft') prevSection();
-  if (e.key === 'ArrowRight') nextSection();
-});
+translateBtn.addEventListener('click', translateSelection);
+explainBtn.addEventListener('click', explainSelection);
+saveBtn.addEventListener('click', saveSelection);
 
 document.addEventListener('click', (e) => {
   if (!toolbar.contains(e.target)) {
@@ -111,12 +125,23 @@ document.addEventListener('click', (e) => {
   }
 });
 
-viewerEl.addEventListener('mouseup', handleSelection);
-viewerEl.addEventListener('touchend', () => setTimeout(handleSelection, 50));
+document.addEventListener('keydown', (e) => {
+  if (readerView.classList.contains('hidden')) return;
+
+  if (e.key === 'ArrowLeft') prevSection();
+  if (e.key === 'ArrowRight') nextSection();
+  if (e.key === 'Escape') closeActionSheet();
+});
 
 function setTheme(theme) {
   document.body.className = theme === 'default' ? '' : `theme-${theme}`;
-  currentTheme = theme;
+  const idx = currentThemeCycle.indexOf(theme);
+  if (idx >= 0) currentThemeIndex = idx;
+}
+
+function cycleReaderTheme() {
+  currentThemeIndex = (currentThemeIndex + 1) % currentThemeCycle.length;
+  setTheme(currentThemeCycle[currentThemeIndex]);
 }
 
 function changeFontSize(delta) {
@@ -130,16 +155,39 @@ function applyReaderStyles() {
   viewerEl.style.fontSize = `${currentFontSize}px`;
 }
 
-function closeActionPanel() {
-  actionPanelEl.classList.remove('active');
+function enterReaderMode() {
+  homeView.classList.add('hidden');
+  readerView.classList.remove('hidden');
+  overlayVisible = true;
+  readerOverlayEl.classList.add('visible');
+  hideToolbar();
+  closeActionSheet();
 }
 
-function openActionPanel(text) {
+function returnToLibrary() {
+  readerView.classList.add('hidden');
+  homeView.classList.remove('hidden');
+  hideToolbar();
+  closeActionSheet();
+}
+
+function toggleOverlay() {
+  overlayVisible = !overlayVisible;
+  readerOverlayEl.classList.toggle('visible', overlayVisible);
+}
+
+function openActionSheet(text) {
   if (!text || !text.trim()) return;
   selectedFragment = text.trim();
   selectedTextBoxEl.textContent = selectedFragment;
-  actionResultEl.textContent = 'Выбери действие: перевести, объяснить или сохранить.';
-  actionPanelEl.classList.add('active');
+  actionResultEl.textContent = 'Выбери действие.';
+  actionSheet.classList.remove('hidden');
+  sheetBackdrop.classList.remove('hidden');
+}
+
+function closeActionSheet() {
+  actionSheet.classList.add('hidden');
+  sheetBackdrop.classList.add('hidden');
 }
 
 function hideToolbar() {
@@ -174,6 +222,23 @@ function handleSelection() {
   showToolbar(x, y);
 }
 
+function handleSwipeEnd() {
+  if (!touchStartX || !touchEndX) return;
+
+  const delta = touchEndX - touchStartX;
+
+  if (Math.abs(delta) > 60) {
+    if (delta < 0) {
+      nextSection();
+    } else {
+      prevSection();
+    }
+  }
+
+  touchStartX = 0;
+  touchEndX = 0;
+}
+
 async function callAI(action, text, targetLanguage = 'Russian') {
   const response = await fetch(AI_ENDPOINT, {
     method: 'POST',
@@ -201,6 +266,7 @@ async function callAI(action, text, targetLanguage = 'Russian') {
 
 function getTargetLanguageName() {
   const langCode = languageSelect.value || 'ru';
+
   const languageMap = {
     ru: 'Russian',
     en: 'English',
@@ -212,11 +278,13 @@ function getTargetLanguageName() {
     zh: 'Chinese',
     la: 'Latin'
   };
+
   return languageMap[langCode] || 'Russian';
 }
 
 async function translateSelection() {
   if (!selectedFragment) return;
+
   actionResultEl.textContent = 'Перевожу...';
 
   try {
@@ -231,6 +299,7 @@ async function translateSelection() {
 
 async function explainSelection() {
   if (!selectedFragment) return;
+
   actionResultEl.textContent = 'Объясняю...';
 
   try {
@@ -387,11 +456,6 @@ function addLocalBookButton() {
 }
 
 async function openLocalBook() {
-  emptyStateEl.style.display = 'none';
-  readerFrameEl.style.display = 'block';
-  bookTitleEl.textContent = 'The Antichrist';
-  statusTextEl.textContent = 'Загружаю локальную книгу...';
-
   try {
     const response = await fetch('books/antichrist.txt');
     const text = await response.text();
@@ -400,24 +464,18 @@ async function openLocalBook() {
       throw new Error('Файл пустой или не загрузился');
     }
 
+    currentBookTitle = 'The Antichrist';
     sections = splitIntoSections(text, 12000);
     currentSectionIndex = 0;
+    enterReaderMode();
     renderCurrentSection();
-
-    statusTextEl.textContent = 'Локальная книга открыта';
   } catch (error) {
     console.error(error);
-    statusTextEl.textContent = 'Ошибка загрузки книги';
-    viewerEl.textContent = error.message;
+    alert('Ошибка загрузки локальной книги: ' + error.message);
   }
 }
 
 async function openExternalTextBook(url, title) {
-  emptyStateEl.style.display = 'none';
-  readerFrameEl.style.display = 'block';
-  bookTitleEl.textContent = title;
-  statusTextEl.textContent = 'Загружаю книгу...';
-
   try {
     const response = await fetch(`https://cors.isomorphic-git.org/${url}`);
     const text = await response.text();
@@ -426,24 +484,24 @@ async function openExternalTextBook(url, title) {
       throw new Error('Текст не загрузился');
     }
 
+    currentBookTitle = title;
     sections = splitIntoSections(text, 12000);
     currentSectionIndex = 0;
+    enterReaderMode();
     renderCurrentSection();
-
-    statusTextEl.textContent = 'Книга открыта';
   } catch (error) {
     console.error(error);
-    statusTextEl.textContent = 'Ошибка загрузки книги';
-    viewerEl.textContent = error.message;
+    alert('Ошибка загрузки книги: ' + error.message);
   }
 }
 
 function splitIntoSections(text, maxLength = 12000) {
-  const paragraphs = text
+  const cleaned = text
     .replace(/\r/g, '')
     .replace(/\n{3,}/g, '\n\n')
-    .split(/\n\s*\n/);
+    .trim();
 
+  const paragraphs = cleaned.split(/\n\s*\n/);
   const result = [];
   let current = '';
 
@@ -460,7 +518,32 @@ function splitIntoSections(text, maxLength = 12000) {
   }
 
   if (current.trim()) result.push(current.trim());
-  return result.length ? result : [text];
+
+  return result.length ? result : [cleaned];
+}
+
+function getCurrentChapterLabel(sectionText, index) {
+  const lines = sectionText
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  const first = lines[0] || '';
+  const shortFirst = first.slice(0, 60);
+
+  if (/^chapter\b/i.test(first)) {
+    return shortFirst;
+  }
+
+  if (/^(глава|часть)\b/i.test(first)) {
+    return shortFirst;
+  }
+
+  if (/^[IVXLCDM]+\b/.test(first)) {
+    return `Глава ${index + 1}`;
+  }
+
+  return `Глава ${index + 1}`;
 }
 
 function renderCurrentSection() {
@@ -478,7 +561,11 @@ function renderCurrentSection() {
 
   applyReaderStyles();
 
-  statusTextEl.textContent = `Часть ${currentSectionIndex + 1} из ${sections.length}`;
+  chapterLineEl.textContent = getCurrentChapterLabel(text, currentSectionIndex);
+
+  const remaining = Math.max(sections.length - currentSectionIndex - 1, 0);
+  remainingLineEl.textContent = `До конца главы: ${remaining} стр.`;
+
   viewerEl.scrollTop = 0;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -499,4 +586,5 @@ window.addEventListener('load', () => {
   searchInput.value = 'Nietzsche';
   searchBooks();
   applyReaderStyles();
+  setTheme('dark');
 });
