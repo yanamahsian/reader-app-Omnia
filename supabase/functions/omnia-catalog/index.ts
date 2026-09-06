@@ -3,6 +3,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // Public startup catalog. It deliberately returns only the curated Free
 // corpus; paid discovery is handled by omnia-library-catalog after user
 // identity/plan resolution.
+//
+// IMPORTANT: source rows come from a single JSON-returning RPC rather than
+// unpaginated PostgREST table selects. The production PostgREST row cap may
+// be much smaller than the catalog (it was 10 when this bug was found), so
+// direct .select("*") calls silently truncated the startup catalog.
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
@@ -44,7 +49,7 @@ interface EditionRow {
   id: string;
   work_id: string;
   language: string;
-  is_original: boolean;
+  is_original: boolean | null;
   translator_name: string | null;
   ingestion_status: string;
 }
@@ -63,13 +68,12 @@ interface RightsRow {
   jurisdiction: string | null;
 }
 
-interface WorkReadinessRow {
-  work_id: string;
-  catalog_ready: boolean;
-}
-
-interface FreeCatalogWorkRow {
-  work_id: string;
+interface CatalogPayload {
+  works?: WorkRow[];
+  authors?: AuthorRow[];
+  editions?: EditionRow[];
+  files?: BookFileRow[];
+  rights?: RightsRow[];
 }
 
 Deno.serve(async (req: Request) => {
@@ -85,41 +89,18 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   try {
-    const [worksRes, authorsRes, editionsRes, filesRes, rightsRes, readinessRes, freeCatalogRes] = await Promise.all([
-      supabase.from("works").select("*"),
-      supabase.from("authors").select("*"),
-      supabase.from("editions").select("id, work_id, language, is_original, translator_name, ingestion_status"),
-      supabase.from("book_files").select("id, edition_id, kind, format, ingestion_status").eq("kind", "normalized"),
-      supabase.from("rights_assertions").select("edition_id, status, jurisdiction"),
-      supabase.from("work_readiness").select("work_id, catalog_ready"),
-      supabase.from("free_catalog_works").select("work_id").eq("enabled", true)
-    ]);
-
-    for (const [name, res] of Object.entries({ works: worksRes, authors: authorsRes, editions: editionsRes, files: filesRes, rights: rightsRes, readiness: readinessRes, freeCatalog: freeCatalogRes })) {
-      if (res.error) {
-        console.error(`omnia-catalog: ${name} query failed`, res.error);
-        return new Response(`Failed to query ${name}: ${res.error.message}`, { status: 500, headers: CORS_HEADERS });
-      }
+    const { data, error } = await supabase.rpc("get_free_startup_catalog_data");
+    if (error) {
+      console.error("omnia-catalog: catalog RPC failed", error);
+      return new Response(`Failed to build catalog: ${error.message}`, { status: 500, headers: CORS_HEADERS });
     }
 
-    const works = worksRes.data as WorkRow[];
-    const authors = authorsRes.data as AuthorRow[];
-    const editions = editionsRes.data as EditionRow[];
-    const files = filesRes.data as BookFileRow[];
-    const rights = rightsRes.data as RightsRow[];
-    const readiness = readinessRes.data as WorkReadinessRow[];
-    const freeCatalogWorks = freeCatalogRes.data as FreeCatalogWorkRow[];
-
-    const catalogReadyWorkIds = new Set(
-      readiness.filter(row => row.catalog_ready === true).map(row => row.work_id)
-    );
-    const freeWorkIds = new Set(freeCatalogWorks.map(row => row.work_id));
-
-    const publicWorks = works.filter(work =>
-      work.publication_status === "published" &&
-      catalogReadyWorkIds.has(work.id) &&
-      freeWorkIds.has(work.id)
-    );
+    const payload = (data ?? {}) as CatalogPayload;
+    const works = Array.isArray(payload.works) ? payload.works : [];
+    const authors = Array.isArray(payload.authors) ? payload.authors : [];
+    const editions = Array.isArray(payload.editions) ? payload.editions : [];
+    const files = Array.isArray(payload.files) ? payload.files : [];
+    const rights = Array.isArray(payload.rights) ? payload.rights : [];
 
     const authorById = new Map(authors.map(author => [author.id, author]));
 
@@ -145,7 +126,7 @@ Deno.serve(async (req: Request) => {
       editionsByWork.set(edition.work_id, list);
     }
 
-    const responseBooks = publicWorks.map(work => {
+    const responseBooks = works.map(work => {
       const author = authorById.get(work.author_id);
       const workEditions = editionsByWork.get(work.id) ?? [];
 
@@ -186,7 +167,7 @@ Deno.serve(async (req: Request) => {
       };
     });
 
-    const referencedAuthorIds = new Set(publicWorks.map(work => work.author_id));
+    const referencedAuthorIds = new Set(works.map(work => work.author_id));
     const responseAuthors = authors
       .filter(author => referencedAuthorIds.has(author.id))
       .map(author => ({
