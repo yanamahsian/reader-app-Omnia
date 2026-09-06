@@ -8,6 +8,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // unpaginated PostgREST table selects. The production PostgREST row cap may
 // be much smaller than the catalog (it was 10 when this bug was found), so
 // direct .select("*") calls silently truncated the startup catalog.
+//
+// Edition provenance is preserved exactly as stored in public.editions.
+// The startup endpoint must never hard-code every remote edition as
+// Gutenberg because the catalog now mixes Gutenberg, Wikisource, Wolne
+// Lektury, Library of Congress and other providers.
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
@@ -51,6 +56,8 @@ interface EditionRow {
   language: string;
   is_original: boolean | null;
   translator_name: string | null;
+  source_id: string | null;
+  external_id: string | null;
   ingestion_status: string;
 }
 
@@ -149,21 +156,26 @@ Deno.serve(async (req: Request) => {
         description: work.description ?? "",
         cover: work.cover,
         collectionIds: work.collection_ids ?? [],
-        editions: workEditions.map(edition => ({
-          id: edition.id,
-          language: edition.language,
-          isOriginal: edition.is_original,
-          translatorName: edition.translator_name,
-          rights: (rightsByEdition.get(edition.id) ?? []).map(r => ({ status: r.status, jurisdiction: r.jurisdiction })),
-          sourceId: "gutenberg",
-          externalIds: {},
-          files: edition.ingestion_status === "ready"
-            ? (readyFilesByEdition.get(edition.id) ?? []).map(file => ({
-                format: file.format,
-                url: `${BOOK_CONTENT_ENDPOINT}?editionId=${encodeURIComponent(edition.id)}`
-              }))
-            : []
-        }))
+        editions: workEditions.map(edition => {
+          const sourceId = edition.source_id?.trim() || "anki-catalog";
+          const externalIds = edition.external_id ? { [sourceId]: edition.external_id } : {};
+
+          return {
+            id: edition.id,
+            language: edition.language,
+            isOriginal: edition.is_original,
+            translatorName: edition.translator_name,
+            rights: (rightsByEdition.get(edition.id) ?? []).map(r => ({ status: r.status, jurisdiction: r.jurisdiction })),
+            sourceId,
+            externalIds,
+            files: edition.ingestion_status === "ready"
+              ? (readyFilesByEdition.get(edition.id) ?? []).map(file => ({
+                  format: file.format,
+                  url: `${BOOK_CONTENT_ENDPOINT}?editionId=${encodeURIComponent(edition.id)}`
+                }))
+              : []
+          };
+        })
       };
     });
 
