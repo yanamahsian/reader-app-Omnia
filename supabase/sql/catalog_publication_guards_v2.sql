@@ -144,7 +144,8 @@ begin
   select distinct x, true
   from unnest(p_work_ids) x
   where nullif(btrim(x), '') is not null
-  on conflict(work_id) do update set enabled = excluded.enabled;
+  on conflict on constraint free_catalog_works_pkey
+  do update set enabled = excluded.enabled;
 
   return query
   select w.id,
