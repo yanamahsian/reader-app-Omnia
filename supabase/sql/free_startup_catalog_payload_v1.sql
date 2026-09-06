@@ -14,6 +14,11 @@
 --   AND work_readiness.catalog_ready = true
 --   AND free_catalog_works.enabled = true
 --
+-- Edition provenance is part of the payload. source_id/external_id must not
+-- be replaced with a hard-coded provider in the Edge Function because the
+-- catalog now contains Gutenberg, Wikisource, Wolne Lektury, LoC and other
+-- providers side by side.
+--
 -- The function is executable only by service_role; browsers continue to use
 -- the public omnia-catalog Edge Function rather than calling this RPC.
 
@@ -43,6 +48,8 @@ with public_works as (
          e.language,
          e.is_original,
          e.translator_name,
+         e.source_id,
+         e.external_id,
          e.ingestion_status
   from public.editions e
   join public_works w on w.id = e.work_id
